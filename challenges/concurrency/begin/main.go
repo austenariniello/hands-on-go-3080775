@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -81,13 +82,30 @@ func doAnalysis(data string, counters ...counter) map[string]int {
 	// initialize a map to store the counts
 	analysis := make(map[string]int)
 
+	// initialize a wait group for syncing the goroutines
+	// one gorountine for each counter
+	var wg sync.WaitGroup
+	wg.Add(len(counters))
+
+	// initialize a mutex to prevent data races
+	var mu sync.Mutex
+
 	// capture the length of the words in the data
 	analysis["words"] = len(strings.Fields(data))
 
 	// loop over the counters and use their name as the key
 	for _, c := range counters {
-		analysis[c.name()] = c.count(data)
+		go func(data string, c counter)  {
+			defer wg.Done()
+			mu.Lock()
+			defer mu.Unlock()
+			analysis[c.name()] = c.count(data)
+		}(data, c)
+		
 	}
+
+	// wait for all goroutines to finish
+	wg.Wait()
 
 	// return the map
 	return analysis
